@@ -42,6 +42,7 @@ ServerSystem::ServerSystem(ros::NodeHandle Nh, ros::NodeHandle NhPrivate, const 
     }
 
     //+++++ load vocabulary +++++
+    //my add pc thread
     mpPointCloudMapping = boost::make_shared<PointCloudMapping>( 0.01,50,2.0);
     this->LoadVocabulary(strVocFile);
 
