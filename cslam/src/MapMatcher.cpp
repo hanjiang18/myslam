@@ -411,7 +411,7 @@ bool MapMatcher::ComputeSim3()
 
 void MapMatcher::CorrectLoop()
 {
-    cout << "\033[1;32m!!! MAP MATCH FOUND !!!\033[0m" << endl;
+    cout << "\033[1;36m!!! MAP MATCH FOUND !!!\033[0m" << endl;
     //该地图包含几个客户端的地图msuAssClients
     set<size_t> suAssCLientsCurr = mpCurrentKF->GetMapptr()->msuAssClients;
     set<size_t> suAssCLientsMatch = mpMatchedKF->GetMapptr()->msuAssClients;

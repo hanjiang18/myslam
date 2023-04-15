@@ -529,7 +529,7 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
 //    }
 //    std::cout << "MapMerger: GBA finished - continue" << std::endl;
 
-    cout << "\033[1;32;41m!!! MAPS MERGED !!!\033[0m" << endl;
+    cout << "\033[1;36;40m!!! MAPS MERGED !!!\033[0m" << endl;
     this->SetIdle();
 
     //delete old maps and set new ones in threads
@@ -764,7 +764,7 @@ void MapMerger::RunGBA(idpair nLoopKf, mapptr pFusedMap)
         mpPointCloudMapping->currentvpKFs=vpkfs;
         cout<<"here"<<endl;
         mpPointCloudMapping->updatecloud();
-        cout<<"------------------my cloud updated---------------------"<<endl;
+        cout << "\033[1;33m!!! ---DENSE MAP UPDATE--- !!!\033[0m" << endl;
 
         #ifdef FINALBA
         pFusedMap->unsetGBAinterrupted();
