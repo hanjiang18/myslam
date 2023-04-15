@@ -47,7 +47,8 @@ int main(int argc, char **argv) {
 
     ros::MultiThreadedSpinner MSpin(2);
 
-        MSpin.spin();
+    MSpin.spin();
+    pSSys->save();
 
     ros::waitForShutdown();
 

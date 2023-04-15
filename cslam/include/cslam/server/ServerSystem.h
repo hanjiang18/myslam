@@ -70,6 +70,8 @@ public:
     ServerSystem(ros::NodeHandle Nh, ros::NodeHandle NhPrivate, const string &strVocFile);
     void InitializeClients();
     void InitializeMapMatcher();
+    void save();
+
 
     bool CallbackSaveMap(ccmslam::ServiceSaveMap::Request &req, ccmslam::ServiceSaveMap::Response &res);
 
@@ -82,7 +84,7 @@ private:
     void InitializeKFDB();
     void InitializeMapping();
     void InitializeViewer();
-
+   
     void CleanWriteOutFile(std::string sFileName);
 
     //ROS infrastructure

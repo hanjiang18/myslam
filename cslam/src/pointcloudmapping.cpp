@@ -3,17 +3,14 @@
 namespace cslam{
 int currentloopcount = 0;
  PointCloudMapping:: PointCloudMapping(double resolution_,double meank_,double thresh_){
-    //cout<<"here"<<endl;
     this->resolution = resolution_;
     this->meank = thresh_;
     this->thresh = thresh_;
     statistical_filter.setMeanK(meank);
     statistical_filter.setStddevMulThresh(thresh);
     voxel.setLeafSize( resolution, resolution, resolution);
-    //cout<<"here1"   <<endl;
     globalMap = boost::make_shared< PointCloud >( );
     viewerThread = boost::make_shared<thread>( bind(&PointCloudMapping::viewer, this ) );
-    //cout<<"here2" <<endl;
 }
 
 void PointCloudMapping::shutdown()
@@ -118,7 +115,7 @@ void PointCloudMapping::viewer()
 
 void PointCloudMapping::save()
 {
-	pcl::io::savePCDFile( "result.pcd", *globalMap );
+	pcl::io::savePCDFile( "/home/ccm/ccmslam_ws/src/ccm_slam-master/cslam/result.pcd", *globalMap );
 	cout<<"globalMap save finished"<<endl;
 }
 

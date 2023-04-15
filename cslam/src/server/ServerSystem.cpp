@@ -43,7 +43,7 @@ ServerSystem::ServerSystem(ros::NodeHandle Nh, ros::NodeHandle NhPrivate, const 
 
     //+++++ load vocabulary +++++
     //my add pc thread
-    mpPointCloudMapping = boost::make_shared<PointCloudMapping>( 0.01,50,2.0);
+    mpPointCloudMapping = boost::make_shared<PointCloudMapping>( 0.03,50,2.0);
     this->LoadVocabulary(strVocFile);
 
     //+++++ Create KeyFrame Database +++++
@@ -219,6 +219,11 @@ void ServerSystem::CleanWriteOutFile(string sFileName)
     std::ofstream keyframesFile;
     keyframesFile.open(sFileName, std::ofstream::out | std::ofstream::trunc);
     keyframesFile.close();
+}
+
+void ServerSystem::save()
+{
+    mpPointCloudMapping->save();
 }
 
 } //end namespace
