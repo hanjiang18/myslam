@@ -205,9 +205,7 @@ vector<KeyFrameDatabase::kfptr> KeyFrameDatabase::DetectLoopCandidates(kfptr pKF
 vector<KeyFrameDatabase::kfptr> KeyFrameDatabase::DetectMapMatchCandidates(kfptr pKF, float minScore, mapptr pMap)
 {
     list<kfptr> lKFsSharingWords;
-
-    // Search all keyframes that share a word with current keyframes
-    // Discard keyframes that belong to KF's map
+    //在所有关键帧中找到所有拥有共同单词，却和当前帧来自不同客户端的帧，并标记其匹配帧为当前帧，放进---lKFsSharingWords
     {
         unique_lock<mutex> lock(mMutex);
 
@@ -240,18 +238,20 @@ vector<KeyFrameDatabase::kfptr> KeyFrameDatabase::DetectMapMatchCandidates(kfptr
     list<pair<float,kfptr> > lScoreAndMatch;
 
     // Only compare against those keyframes that share enough words
+    //更新最大单词的数量
     int maxCommonWords=0;
     for(list<kfptr>::iterator lit=lKFsSharingWords.begin(), lend= lKFsSharingWords.end(); lit!=lend; lit++)
     {
         if((*lit)->mnLoopWords>maxCommonWords)
             maxCommonWords=(*lit)->mnLoopWords;
     }
-
+    //最小的是最大的0.8倍
     int minCommonWords = maxCommonWords*0.8f;
 
     int nscores=0;
 
     // Compute similarity score. Retain the matches whose score is higher than minScore
+    //计算单词数大于最小值的帧计算其与当前帧的分数，将得分和关键帧组成对应数据结构放入 --lScoreAndMatch
     for(list<kfptr>::iterator lit=lKFsSharingWords.begin(), lend= lKFsSharingWords.end(); lit!=lend; lit++)
     {
         kfptr pKFi = *lit;
@@ -278,11 +278,13 @@ vector<KeyFrameDatabase::kfptr> KeyFrameDatabase::DetectMapMatchCandidates(kfptr
     for(list<pair<float,kfptr> >::iterator it=lScoreAndMatch.begin(), itend=lScoreAndMatch.end(); it!=itend; it++)
     {
         kfptr pKFi = it->second;
+        //找到lScoreAndMatch每个帧的前十五个共视帧
         vector<kfptr> vpNeighs = pKFi->GetBestCovisibilityKeyFrames(10);
 
         float bestScore = it->first;
         float accScore = it->first;
         kfptr pBestKF = pKFi;
+        //如果前十五个共视帧的某个帧与当前帧匹配了而且其单词数量大于最小值，贡献分数给 accScore，并得到最高分数及对应关键帧
         for(vector<kfptr>::iterator vit=vpNeighs.begin(), vend=vpNeighs.end(); vit!=vend; vit++)
         {
             kfptr pKF2 = *vit;
@@ -297,13 +299,14 @@ vector<KeyFrameDatabase::kfptr> KeyFrameDatabase::DetectMapMatchCandidates(kfptr
                 }
             }
         }
-
+        // lAccScoreAndMatch存放一级共视某一帧的总分数和最高分
         lAccScoreAndMatch.push_back(make_pair(accScore,pBestKF));
         if(accScore>bestAccScore)
             bestAccScore=accScore;
     }
 
     // Return all those keyframes with a score higher than 0.75*bestScore
+    //设定0.75倍的最高总分为最低分
     float minScoreToRetain = 0.75f*bestAccScore;
 
     set<kfptr> spAlreadyAddedKF;
@@ -312,6 +315,7 @@ vector<KeyFrameDatabase::kfptr> KeyFrameDatabase::DetectMapMatchCandidates(kfptr
 
     for(list<pair<float,kfptr> >::iterator it=lAccScoreAndMatch.begin(), itend=lAccScoreAndMatch.end(); it!=itend; it++)
     {
+        //如果得分>最低总分将对应关键帧加入vpLoopCandidates
         if(it->first>minScoreToRetain)
         {
             kfptr pKFi = it->second;

@@ -357,6 +357,17 @@ void ClientHandler::ClearCovGraph(size_t MapId)
     mpMapping->ClearCovGraph(MapId);
 }
 
+void ClientHandler::shutdown(){
+    mpMapping->RequestFinish();
+    //mpLoopFinder->RequestFinish();
+
+    while(!mpMapping->isFinished() ){
+        usleep(5000);
+    }
+    // if(mpViewer){
+    //     mpViewer->
+    // }
+}
 //#ifdef LOGGING
 //void ClientHandler::SetLogger(boost::shared_ptr<mylog> pLogger)
 //{

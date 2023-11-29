@@ -80,6 +80,9 @@ Communicator::Communicator(ccptr pCC, vocptr pVoc, mapptr pMap, dbptr pKFDB ,pcm
         mSubMap = mNh.subscribe<ccmslam_msgs::Map>(MapInTopicName,params::comm::server::miSubMapBufferSize,boost::bind(&Communicator::MapCbServer,this,_1));
 
         //Publisher
+
+        pub=mNh.advertise<ccmslam_msgs::Map>("mypub",1000);
+
         ss = new stringstream;
         *ss << "MapOut" << SysType << mClientId;
         PubMapTopicName = ss->str();
@@ -382,6 +385,9 @@ void Communicator::MapCbClient(ccmslam_msgs::MapConstPtr pMsg)
 
 void Communicator::MapCbServer(ccmslam_msgs::MapConstPtr pMsg)
 {
+    ccmslam_msgs::Map msg1=*pMsg;
+    //cout<<msg1.Keyframes.size()<<endl;
+    pub.publish(msg1);
     {
         unique_lock<mutex> lock(mMutexBuffersIn);
 
@@ -815,6 +821,7 @@ void Communicator::ProcessKfInClient()
 void Communicator::ProcessKfInServer()
 {
     int ItCount = 0;
+    //cout<<"buffer size: "<<mlBufKFin.size() << endl;
 
     while (!mlBufKFin.empty() && (ItCount < mKfItBound))
     {
@@ -845,7 +852,7 @@ void Communicator::ProcessKfInServer()
             }
 
             kfptr pKF{new KeyFrame(pMsg,mpVoc,mpMap,mpDatabase,shared_from_this(),mpCC->mSysState,mpCC->mpUID->GetId(),mpCC->mg2oS_wcurmap_wclientmap)};
-
+            
             pKF->mdServerTimestamp = ros::Time::now().toNSec();
 
             if(pKF->isBad())
@@ -952,6 +959,21 @@ void Communicator::ProcessKfInServer()
         }
 
         ++ItCount;
+
+        //my add kfculling
+        mpMap->mpKFDB=mpDatabase;
+        int thre=0;
+        if(mpMap->isfused==true)
+            thre=300;
+        else
+            thre=150;
+
+       // cout<<"thre : "<<thre<<endl;
+        if(mpMap->GetMmpKeyFrames().size()>500){
+            mpMap->RemoveRedundantData(0,0);
+            //cout<<"start: "<<mpMap->GetMmpKeyFrames().size()<<endl;
+        }
+            
 
         #ifndef HIDEBUFFERLIMITS
         if(ItCount == mKfItBound)

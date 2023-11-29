@@ -60,8 +60,12 @@ LoopFinder::LoopFinder(ccptr pCC, dbptr pDB, vocptr pVoc, mapptr pMap,pcmptr pPo
 
 void LoopFinder::Run()
 {
+    //int sum=0;
     while(1)
     {
+        //++sum;
+        //if(sum%2000==0)
+            //cout<<"loop finder finished : "<<sum<<endl;
         #ifdef LOGGING
         mpCC->mpLogger->SetLoop(__LINE__,0);
         #endif
@@ -81,7 +85,7 @@ void LoopFinder::Run()
             {
                 // Compute similarity transformation [sR|t]
                 bool bSim3 = ComputeSim3();
-                cout<<"Sim3: "<<bSim3<<endl;
+                //cout<<"Sim3: "<<bSim3<<endl;
                 if(bSim3)
                 {
                     // Perform loop fusion and pose graph optimization
@@ -252,7 +256,7 @@ bool LoopFinder::ComputeSim3()
     vbDiscarded.resize(nInitialCandidates);
 
     int nCandidates=0; //candidates with enough matches
-    cout<<"nInitialCandidates = "<<nInitialCandidates<<endl;
+    //cout<<"nInitialCandidates = "<<nInitialCandidates<<endl;
     for(int i=0; i<nInitialCandidates; i++)
     {
         kfptr pKF = mvpEnoughConsistentCandidates[i];
@@ -269,7 +273,7 @@ bool LoopFinder::ComputeSim3()
 
         int nmatches = matcher.SearchByBoW(mpCurrentKF,pKF,vvpMapPointMatches[i]);
         //vvpMapPointMatches[KF candidate index][CurKF MP-IDc] = best matching MP of candidate KF for MP-IDc of CurKF
-        cout<<"nmatches = "<<nmatches<<endl;
+        //cout<<"nmatches = "<<nmatches<<endl;
         if(nmatches<params::opt::mMatchesThres)
         {
             vbDiscarded[i] = true;
@@ -290,7 +294,7 @@ bool LoopFinder::ComputeSim3()
 
     // Perform alternatively RANSAC iterations for each candidate
     // until one is succesful or all fail
-    cout<<"ncandidates: "<<nCandidates<<endl;
+    //cout<<"ncandidates: "<<nCandidates<<endl;
     while(nCandidates>0 && !bMatch)
     {
         for(int i=0; i<nInitialCandidates; i++)
@@ -334,7 +338,7 @@ bool LoopFinder::ComputeSim3()
                 g2o::Sim3 gScm(Converter::toMatrix3d(R),Converter::toVector3d(t),s);
 
                 const int nInliers = Optimizer::OptimizeSim3(mpCurrentKF, pKF, vpMapPointMatches, gScm, 10, mbFixScale);
-                cout<<"inliers : "<<nInliers<<endl;
+                //cout<<"inliers : "<<nInliers<<endl;
                 // If optimization is succesful stop ransacs and continue
                 if(nInliers>=params::opt::mInliersThres)
                 {

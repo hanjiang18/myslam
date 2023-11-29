@@ -23,7 +23,8 @@
 */
 
 #include <cslam/Mapping.h>
-
+#include <fstream>
+using namespace std;
 namespace cslam {
 
 LocalMapping::LocalMapping(ccptr pCC, mapptr pMap, dbptr pDB, viewptr pViewer = nullptr)
@@ -164,6 +165,7 @@ void LocalMapping::RunServer()
             if(params::mapping::mfRedundancyThres < 1.0 && !CheckNewKeyFrames())
             {
                 KeyFrameCullingV3();
+                //mpMap->RemoveRedundantData(0,0);
             }
 
             mpLoopFinder->InsertKF(mpCurrentKeyFrame);
@@ -178,6 +180,20 @@ void LocalMapping::RunServer()
 
             mpCC->UnLockMapping();
 
+            ofstream keyframesFile; 
+             ros::Time right_now = ros::Time::now();
+             keyframesFile.open("/home/ccm/ccm1.txt", ios::app);
+             //const double stamp = right_now;
+            const cv::Mat T_wc = mpCurrentKeyFrame->GetPoseInverse();
+            const Eigen::Matrix4d eT_wc = cslam::Converter::toMatrix4d(T_wc);
+            Eigen::Matrix4d T_SC;
+            T_SC = mpCurrentKeyFrame->mT_SC;
+            const Eigen::Matrix4d Tws = eT_wc * T_SC.inverse();
+            const Eigen::Quaterniond q(Tws.block<3,3>(0,0));
+            keyframesFile << std::setprecision(6) << right_now << " ";
+            keyframesFile << Tws(0,3) << " " << Tws(1,3) << " " << Tws(2,3) << " ";
+            keyframesFile << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << std::endl;
+            keyframesFile.close();
             #ifdef LOGGING
             mpCC->mpLogger->SetMapping(__LINE__,mClientId);
             #endif
@@ -829,7 +845,8 @@ void LocalMapping::MapPointCullingServer()
     }
 }
 
-void LocalMapping::KeyFrameCullingV3()
+int sum=0;
+void LocalMapping::KeyFrameCullingV3()  
 {
     //This version: randomly pick a KF and check for redundancy
     kfptr pKFc = mpMap->GetRandKfPtr();
@@ -862,9 +879,12 @@ void LocalMapping::KeyFrameCullingV3()
     // We only consider close stereo points
     vector<kfptr> vpLocalKeyFrames = pKFc->GetVectorCovisibleKeyFrames();
 
+    //vector<kfptr> vpLocalKeyFrames =mpCurrentKeyFrame->GetVectorCovisibleKeyFrames();
+
     for(vector<kfptr>::iterator vit=vpLocalKeyFrames.begin(), vend=vpLocalKeyFrames.end(); vit!=vend; vit++)
     {
         kfptr pKF = *vit;
+        
         if(pKF->mId.first==0 || pKF->mId.first==1) //don't cull 0, since it's the origin, and also not one, because this was the other KF used for initialization. The systen won't experience problems if culling 1, nevetheless we don't do it.
             continue;
 
@@ -883,6 +903,8 @@ void LocalMapping::KeyFrameCullingV3()
             {
                 if(!pMP->isBad())
                 {
+                     if(pKF->passDepth[i]>40.0 || pKF->passDepth[i]<0)
+                             continue;
                     nMPs++;
                     if(pMP->Observations()>thObs)
                     {
@@ -914,10 +936,12 @@ void LocalMapping::KeyFrameCullingV3()
                 }
             }
         }
-
+        
+        //cout<<"mapping culling : "<<pKF->mId.first<<" "<<pKF->mId.second<<"redundant "<<nRedundantObservations<<"0.9nmaps : "<<0.9*nMPs<<endl;
         if(nRedundantObservations>params::mapping::mfRedundancyThres*nMPs)
         {
             pKF->SetBadFlag();
+            //cout<<"kf culling : "<<pKF->mId.first<<" "<<pKF->mId.second<<"  "<<++sum<<endl;
             ++mCulledKfs;
         }
     }

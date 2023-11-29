@@ -60,17 +60,17 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
         }
         std::cout << __func__ << ":" << __LINE__  << "Continue" << std::endl;
     }
-
+    //停止每张地图的全局BA
     pMapCurr->setNoStartGBA();
     pMapMatch->setNoStartGBA();
 
-    // If a Global Bundle Adjustment is running, abort it
+    // If a Global Bundle Adjustment is running, abort it，停止全局BA
     if(pMapCurr->isRunningGBA())
         pMapCurr->StopGBA();
 
     if(pMapMatch->isRunningGBA())
         pMapMatch->StopGBA();
-
+    //设置当前繁忙
     this->SetBusy();
 
     bool b0 = false;
@@ -85,7 +85,7 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
     ccptr pCClog = *(spCCC.begin());
     pCClog->mpLogger->SetMerge(__LINE__,0);
     #endif
-
+    //centralcontrol的值应该等于当前地图中包含的地图指针的值
     if(spCCC.size() != pMapCurr->msuAssClients.size())
     {
         cout << "\033[1;31m!!! ERROR !!!\033[0m In \"MapMerger::MergeMaps()\": spCCC.size() != pMapCurr->msuAssClients.size()" << endl;
@@ -98,7 +98,7 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
             cout << (*sit)->mClientId << endl;
         throw estd::infrastructure_ex();
     }
-
+    //同上
     if(spCCM.size() != pMapMatch->msuAssClients.size())
     {
         cout << "\033[1;31m!!! ERROR !!!\033[0m In \"MapMerger::MergeMaps()\": spCCM.size() != pMapMatch->msuAssClients.size()" << endl;
@@ -117,7 +117,7 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
         ccptr pCC = *sit;
 
         cout << "spCCC: pCC->mClientId: " << pCC->mClientId << endl;
-
+        //设置b0,b1,b2,b3的bool值
         if(pCC->mClientId > 3) cout << "\033[1;31m!!! ERROR !!!\033[0m In \"MapMerger::MergeMaps()\": associated ClientId out of bounds (" << pCC->mClientId << ")" << endl;
         if(!(pMapCurr->msuAssClients.count(pCC->mClientId))) cout << "\033[1;31m!!! ERROR !!!\033[0m In \"MapMerger::MergeMaps()\": associated ClientId in pCC but not in msuAssClients" << endl;
         switch(pCC->mClientId)
@@ -169,7 +169,7 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
     #ifdef LOGGING
     pCClog->mpLogger->SetMerge(__LINE__,0);
     #endif
-
+    //设置b0,b1,b2,b3的bool值
     for(set<ccptr>::iterator sit = spCCM.begin();sit!=spCCM.end();++sit)
     {
         ccptr pCC = *sit;
@@ -218,14 +218,15 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
 
     // Get Map Mutex
     // Lock all mutexes
+    //上锁
     while(!pMapCurr->LockMapUpdate()){usleep(params::timings::miLockSleep);}
     while(!pMapMatch->LockMapUpdate()){usleep(params::timings::miLockSleep);}
-
+    //修改mbOptActive变量
     for(set<ccptr>::iterator sit = spCCC.begin();sit!=spCCC.end();++sit)
     {
         (*sit)->mbOptActive = true;
     }
-
+    //修改mbOptActive变量
     for(set<ccptr>::iterator sit = spCCM.begin();sit!=spCCM.end();++sit)
     {
         (*sit)->mbOptActive = true;
@@ -239,8 +240,10 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
     }
 
     //create new map
+    //创建一个新地图
     mapptr pFusedMap{new Map(pMapMatch,pMapCurr)};
     while(!pFusedMap->LockMapUpdate()){usleep(params::timings::miLockSleep);}
+    //将所有的关键帧地图点转换到新地图下
     pFusedMap->UpdateAssociatedData();
 
     size_t IdC = vMatchHits[0].mpKFCurr->mId.second;
@@ -252,26 +255,31 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
     idpair nLoopKf;
 
     int idx = 0;
+    //获取融合后地图的当前帧，匹配帧，g2oScw，回环地图点和匹配地图点和所有关键帧
     kfptr pKFCur = vMatchHits[idx].mpKFCurr;
     kfptr pKFMatch = vMatchHits[idx].mpKFMatch;
     g2o::Sim3 g2oScw = vMatchHits[idx].mg2oScw;
     std::vector<mpptr> vpCurrentMatchedPoints = vMatchHits[idx].mvpCurrentMatchedPoints;
     std::vector<mpptr> vpLoopMapPoints = vMatchHits[idx].mvpLoopMapPoints;
-
     vector<kfptr> vpKeyFramesCurr = pMapCurr->GetAllKeyFrames();
 
     if(IdC != pKFCur->mId.second || IdM != pKFMatch->mId.second)
         cout << "\033[1;31m!!! ERROR !!!\033[0m In \"MapMerger::MergeMaps\": client ID mismatch" << endl;
 
     // Ensure current keyframe is updated
+    //共视图更新
     pKFCur->UpdateConnections();
 
     // Retrive keyframes connected to the current keyframe and compute corrected Sim3 pose by propagation
+    //将当前帧及其共视帧一起加入到mvpCurrentConnectedKFs  当前帧已经是融合后地图的了
     mvpCurrentConnectedKFs = pKFCur->GetVectorCovisibleKeyFrames();
     mvpCurrentConnectedKFs.push_back(pKFCur);
 
+    //获取回环id
     nLoopKf = pKFCur->mId;
 
+    // CorrectedSim3：存放闭环g2o优化后当前关键帧的共视关键帧的世界坐标系下Sim3 变换
+    // NonCorrectedSim3：存放没有矫正的当前关键帧的共视关键帧的世界坐标系下Sim3 变换
     KeyFrameAndPose CorrectedSim3, NonCorrectedSim3;
     CorrectedSim3[pKFCur]=g2oScw;
     cv::Mat Twc = pKFCur->GetPoseInverse();
@@ -280,7 +288,12 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
         cv::Mat Rwc = Twc.rowRange(0,3).colRange(0,3);
         cv::Mat twc = Twc.rowRange(0,3).col(3);
         g2o::Sim3 g2oSwc(Converter::toMatrix3d(Rwc),Converter::toVector3d(twc),1.0);
+        //my add
+        //g2o::Sim3 gSmw(Converter::toMatrix3d(pKFMatch->GetRotation()),Converter::toVector3d(pKFMatch->GetTranslation()),1.0);
+         //g2oS_wm_wc =gSmw*g2oSwc;
+         //没搞懂
         g2oS_wm_wc = (g2oScw.inverse())*(g2oSwc.inverse());
+        
     }
 
     KeyFrameAndPose CorrectedSim3All, NonCorrectedSim3All;
@@ -288,16 +301,21 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
 
     for(vector<kfptr>::iterator vit=mvpCurrentConnectedKFs.begin(), vend=mvpCurrentConnectedKFs.end(); vit!=vend; vit++)
     {
+        //当前帧的共视关键帧
         kfptr pKFi = *vit;
-
+    //世界到共视关键帧的变换
         cv::Mat Tiw = pKFi->GetPose();
 
         if(pKFi!=pKFCur)
         {
+            //当前帧到世界的变换
             cv::Mat Tic = Tiw*Twc;
             cv::Mat Ric = Tic.rowRange(0,3).colRange(0,3);
             cv::Mat tic = Tic.rowRange(0,3).col(3);
+            // g2oSic：当前关键帧 mpCurrentKF 到其共视关键帧 pKFi 的Sim3 相对变换
+            // 这里是non-correct, 所以scale=1.0
             g2o::Sim3 g2oSic(Converter::toMatrix3d(Ric),Converter::toVector3d(tic),1.0);
+            // 当前帧的位姿固定不动，其它的关键帧根据相对关系得到Sim3调整的位姿
             g2o::Sim3 g2oCorrectedSiw = g2oSic*g2oScw;
             //Pose corrected with the Sim3 of the loop closure
             CorrectedSim3[pKFi]=g2oCorrectedSiw;
@@ -309,13 +327,13 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
         //Pose without correction
         NonCorrectedSim3[pKFi]=g2oSiw;
     }
-
+    //遍历融合后的地图的所有关键帧更新CorrectedSim3All和NonCorrectedSim3All
     for(vector<kfptr>::iterator vit = vpKeyFramesCurr.begin();vit!=vpKeyFramesCurr.end();++vit)
     {
         kfptr pKFi = *vit;
-
+        
         KeyFrameAndPose::const_iterator it = CorrectedSim3.find(pKFi);
-
+        //找到其中经过sim3修正后的关键帧，添加没有经过修正的关键帧位姿
         if(it!=CorrectedSim3.end())
         {
             CorrectedSim3All[pKFi] = it->second;
@@ -325,6 +343,7 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
 
             NonCorrectedSim3All[pKFi] = NonCorrectedSim3[pKFi];
         }
+        //如果没有找到，将剩下的所有关键帧都用sim3传播
         else
         {
             cv::Mat Tiw = pKFi->GetPose();
@@ -346,14 +365,16 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
     }
 
     // Correct MapPoints and KeyFrames of current map
+    //位姿传播
     for(KeyFrameAndPose::iterator mit=CorrectedSim3All.begin(), mend=CorrectedSim3All.end(); mit!=mend; mit++)
     {
         kfptr pKFi = mit->first;
+        // 取出经过位姿传播后的Sim3变换
         g2o::Sim3 g2oCorrectedSiw = mit->second;
         g2o::Sim3 g2oCorrectedSwi = g2oCorrectedSiw.inverse();
-
+        // 取出未经过位姿传播的Sim3变换
         g2o::Sim3 g2oSiw =NonCorrectedSim3All[pKFi];
-
+        //所有地图点
         vector<mpptr> vpMPsi = pKFi->GetMapPointMatches();
         for(size_t iMP=0, endMPi = vpMPsi.size(); iMP<endMPi; iMP++)
         {
@@ -366,6 +387,7 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
                 continue;
 
             // Project with non-corrected pose and project back with corrected pose
+            // 将该未校正的eigP3Dw先从世界坐标系映射到未校正的pKFi相机坐标系，然后再反映射到校正后的世界坐标系下
             cv::Mat P3Dw = pMPi->GetWorldPos();
             Eigen::Matrix<double,3,1> eigP3Dw = Converter::toVector3d(P3Dw);
             Eigen::Matrix<double,3,1> eigCorrectedP3Dw = g2oCorrectedSwi.map(g2oSiw.map(eigP3Dw));
@@ -451,6 +473,7 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
 
     // Start Loop Fusion
     // Update matched map points and replace if duplicated
+    // mvpCurrentMatchedPoints 是当前关键帧和闭环关键帧组的所有地图点进行投影得到的匹配点
     for(size_t i=0; i<vpCurrentMatchedPoints.size(); i++)
     {
         if(vpCurrentMatchedPoints[i])
@@ -459,10 +482,13 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
             mpptr pCurMP = pKFCur->GetMapPoint(i);
             if(pCurMP)
             {
+                // 如果有重复的MapPoint，则用匹配的地图点代替现有的
+                // 因为匹配的地图点是经过一系列操作后比较精确的，现有的地图点很可能有累计误差
                 pCurMP->ReplaceAndLock(pLoopMP);
             }
             else
             {
+                // 如果当前帧没有该MapPoint，则直接添加
                 pKFCur->AddMapPoint(pLoopMP,i,true); //lock this MapPoint
                 pLoopMP->AddObservation(pKFCur,i,true);
                 pLoopMP->ComputeDistinctiveDescriptors();
@@ -473,23 +499,32 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
     // Project MapPoints observed in the neighborhood of the loop keyframe
     // into the current keyframe and neighbors using corrected poses.
     // Fuse duplications.
+    //地图点替换 匹配帧及其共视帧
     SearchAndFuse(CorrectedSim3,vpLoopMapPoints);
 
     // After the MapPoint fusion, new links in the covisibility graph will appear attaching both sides of the loop
+    // Step 5：更新当前关键帧组之间的两级共视相连关系，得到因闭环时地图点融合而新得到的连接关系
+    // LoopConnections：存储因为闭环地图点调整而新生成的连接关系
     map<kfptr, set<kfptr> > LoopConnections;
 
+    // Step 5.1：遍历当前帧相连关键帧组（一级相连）
     for(vector<kfptr>::iterator vit=mvpCurrentConnectedKFs.begin(), vend=mvpCurrentConnectedKFs.end(); vit!=vend; vit++)
     {
-        kfptr pKFi = *vit;
+        kfptr pKFi = *vit;  
+        // Step 5.2：得到与当前帧相连关键帧的相连关键帧（二级相连）
         vector<kfptr> vpPreviousNeighbors = pKFi->GetVectorCovisibleKeyFrames();
 
         // Update connections. Detect new links.
+        // Step 5.3：更新一级相连关键帧的连接关系(会把当前关键帧添加进去,因为地图点已经更新和替换了)
         pKFi->UpdateConnections();
+      // Step 5.4：取出该帧更新后的连接关系
         LoopConnections[pKFi]=pKFi->GetConnectedKeyFrames();
+        // Step 5.5：从连接关系中去除闭环之前的二级连接关系，剩下的连接就是由闭环得到的连接关系
         for(vector<kfptr>::iterator vit_prev=vpPreviousNeighbors.begin(), vend_prev=vpPreviousNeighbors.end(); vit_prev!=vend_prev; vit_prev++)
         {
             LoopConnections[pKFi].erase(*vit_prev);
         }
+        // Step 5.6：从连接关系中去除闭环之前的一级连接关系，剩下的连接就是由闭环得到的连接关系
         for(vector<kfptr>::iterator vit2=mvpCurrentConnectedKFs.begin(), vend2=mvpCurrentConnectedKFs.end(); vit2!=vend2; vit2++)
         {
             LoopConnections[pKFi].erase(*vit2);
@@ -563,6 +598,7 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
     pMapCurr->unsetNoStartGBA();
     pMapMatch->unsetNoStartGBA();
     pFusedMap->unsetNoStartGBA();
+    pFusedMap->isfused=true;
 
     #ifdef LOGGING
     pCClog->mpLogger->SetMerge(__LINE__,0);
@@ -574,14 +610,14 @@ MapMerger::mapptr MapMerger::MergeMaps(mapptr pMapCurr, mapptr pMapMatch, vector
 void MapMerger::SearchAndFuse(const KeyFrameAndPose &CorrectedPosesMap, std::vector<mpptr> vpLoopMapPoints)
 {
     ORBmatcher matcher(0.8);
-
+    ///Step 1 遍历待矫正的当前KF的相连关键帧
     for(KeyFrameAndPose::const_iterator mit=CorrectedPosesMap.begin(), mend=CorrectedPosesMap.end(); mit!=mend;mit++)
     {
         kfptr pKF = mit->first;
 
         g2o::Sim3 g2oScw = mit->second;
         cv::Mat cvScw = Converter::toCvMat(g2oScw);
-
+        //vpLoopMapPoints--匹配帧及其共视关键帧的地图点
         vector<mpptr> vpReplacePoints(vpLoopMapPoints.size(),nullptr);
         matcher.Fuse(pKF,cvScw,vpLoopMapPoints,4,vpReplacePoints);
 
@@ -635,20 +671,27 @@ void MapMerger::RunGBA(idpair nLoopKf, mapptr pFusedMap)
         cout << "-> Updating map ..." << endl;
 
         // Correct keyframes starting at map first keyframe
+        // 从第一个关键帧开始矫正关键帧。刚开始只保存了初始化第一个关键帧
         list<kfptr> lpKFtoCheck(pFusedMap->mvpKeyFrameOrigins.begin(),pFusedMap->mvpKeyFrameOrigins.end());
-
+        //cout<<"original keyframe : "<<lpKFtoCheck.size()<<endl;
         cout << "--> Updating KFs ..." << endl;
 
         while(!lpKFtoCheck.empty())
         {
+            //取出头帧
             kfptr pKF = lpKFtoCheck.front();
+            //获取该帧的儿子帧
             const set<kfptr> sChilds = pKF->GetChilds();
+            //该帧到世界坐标系的变换矩阵
             cv::Mat Twc = pKF->GetPoseInverse();
+            // 遍历当前关键帧的子关键帧
             for(set<kfptr>::const_iterator sit=sChilds.begin();sit!=sChilds.end();sit++)
             {
                 kfptr pChild = *sit;
+                // mnBAGlobalForKF记录是由于哪个闭环匹配关键帧触发的全局BA,并且已经经过了GBA的优化。
                 if(pChild->mBAGlobalForKF!=nLoopKf)
                 {
+                    // 从父关键帧到当前子关键帧的位姿变换 T_child_farther
                     cv::Mat Tchildc = pChild->GetPose()*Twc;
                     pChild->mTcwGBA = Tchildc*pKF->mTcwGBA;
                     #ifdef DEBUGGING2
@@ -685,7 +728,6 @@ void MapMerger::RunGBA(idpair nLoopKf, mapptr pFusedMap)
 
             if(pMP->isBad())
                 continue;
-
             if(pMP->mBAGlobalForKF==nLoopKf)
             {
                 // If optimized by Global BA, just update
@@ -759,6 +801,8 @@ void MapMerger::RunGBA(idpair nLoopKf, mapptr pFusedMap)
         }
 
         cout << "-> Map updated!" << endl;
+        
+        //dense map update
         vector<kfptr>vpkfs=pFusedMap->GetAllKeyFrames();
         cout<<"vpkfs : "<<vpkfs.size()<<endl;
         mpPointCloudMapping->currentvpKFs=vpkfs;

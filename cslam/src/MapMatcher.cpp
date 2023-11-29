@@ -33,7 +33,6 @@ MapMatcher::MapMatcher(ros::NodeHandle Nh, ros::NodeHandle NhPrivate, dbptr pDB,
       mbFixScale(true),//mbfixscale
       mnCovisibilityConsistencyTh(params::placerec::miCovisibilityConsistencyTh),mpPointCloudMapping(pPointCloud)
 {
-
     if(pMap0) mmpMaps[*(pMap0->msuAssClients.begin())]=pMap0;
     if(pMap1) mmpMaps[*(pMap1->msuAssClients.begin())]=pMap1;
     if(pMap2) mmpMaps[*(pMap2->msuAssClients.begin())]=pMap2;
@@ -78,11 +77,11 @@ void MapMatcher::Run()
         #ifdef LOGGING
         pCC->mpLogger->SetMatch(__LINE__,0);
         #endif
-
+        //判断从局部地图插入的关键帧时候为空
         if(CheckKfQueue())
         {
+            //两不同客户端帧之间进行匹配
             bool bDetect = DetectLoop();
-            //cout<<"bdetect: "<<bDetect<<endl;
             if(bDetect)
             {
                 
@@ -121,7 +120,7 @@ bool MapMatcher::DetectLoop()
         mpCurrentKF->SetErase();
         return false;
     }
-
+    //获取关键帧所在地图指针
     mpCurrMap = mpCurrentKF->GetMapptr(); //get map of KF
 
     if(!mpCurrMap)
@@ -131,11 +130,15 @@ bool MapMatcher::DetectLoop()
     }
 
     // Compute reference BoW similarity score
+    //计算bow相似度得分
     // This is the lowest score to a connected keyframe in the covisibility graph
     // We will impose loop candidates to have a higher similarity than this
+    //获取所有共视帧
     const vector<kfptr> vpConnectedKeyFrames = mpCurrentKF->GetVectorCovisibleKeyFrames();
+    //获取当前帧的词袋向量
     const DBoW2::BowVector &CurrentBowVec = mpCurrentKF->mBowVec;
     float minScore = 1;
+    //得到前帧和所有共视帧的向量最低得分
     for(size_t i=0; i<vpConnectedKeyFrames.size(); i++)
     {
         kfptr pKF = vpConnectedKeyFrames[i];
@@ -151,8 +154,9 @@ bool MapMatcher::DetectLoop()
 
     // Query the database imposing the minimum score
     //zhaodao zaiqitaditu zhongde daixuan kf
+    //获取当前帧对应的关键帧数据库中的候选匹配帧
     vector<kfptr> vpCandidateKFs = mpKFDB->DetectMapMatchCandidates(mpCurrentKF, minScore, mpCurrMap);
-
+    //cout<<"Candidates: "<<vpCandidateKFs.size()<<endl;
     // If there are no loop candidates, just add new keyframe and return false
     if(vpCandidateKFs.empty())
     {
@@ -173,16 +177,18 @@ bool MapMatcher::DetectLoop()
 
     for(size_t i=0, iend=vpCandidateKFs.size(); i<iend; i++)
     {
+        //将每一个候选帧及其自身加入spCandidateGroup形成组
         kfptr pCandidateKF = vpCandidateKFs[i];
-
         set<kfptr> spCandidateGroup = pCandidateKF->GetConnectedKeyFrames();
         spCandidateGroup.insert(pCandidateKF);
         //group with candidate and connected KFs
 
         bool bEnoughConsistent = false;
         bool bConsistentForSomeGroup = false;
+        //mpCurrMap表示当前帧所在的地图指针
         for(size_t iG=0, iendG=mmvConsistentGroups[mpCurrMap].size(); iG<iendG; iG++)
         {
+            // 取出之前的一个子连续组中的关键帧集合
             set<kfptr> sPreviousGroup = mmvConsistentGroups[mpCurrMap][iG].first;
 
             bool bConsistent = false;
@@ -247,16 +253,16 @@ bool MapMatcher::ComputeSim3()
     // We compute first ORB matches for each candidate
     // If enough matches are found, we setup a Sim3Solver
     ORBmatcher matcher(0.75,true);
-
+// 存储每一个候选帧的Sim3Solver求解器
     vector<Sim3Solver*> vpSim3Solvers;
     vpSim3Solvers.resize(nInitialCandidates);
-
+    // 存储每个候选帧的匹配地图点信息
     vector<vector<mpptr> > vvpMapPointMatches;
     vvpMapPointMatches.resize(nInitialCandidates);
-
+// 存储每个候选帧应该被放弃(True）或者 保留(False)
     vector<bool> vbDiscarded;
     vbDiscarded.resize(nInitialCandidates);
-
+ 
     int nCandidates=0; //candidates with enough matches
 
     for(int i=0; i<nInitialCandidates; i++)
@@ -271,7 +277,7 @@ bool MapMatcher::ComputeSim3()
             vbDiscarded[i] = true;
             continue;
         }
-
+        //vvpMapPointMatches[i]存放的是候选帧与当前帧匹配的地图点 是候选帧的点
         int nmatches = matcher.SearchByBoW(mpCurrentKF,pKF,vvpMapPointMatches[i]);
 
         if(nmatches<params::opt::mMatchesThres)
@@ -309,6 +315,7 @@ bool MapMatcher::ComputeSim3()
             bool bNoMore;
 
             Sim3Solver* pSolver = vpSim3Solvers[i];
+            //返回候选帧到当前帧的变换
             cv::Mat Scm  = pSolver->iterate(params::opt::mSolverIterations,bNoMore,vbInliers,nInliers);
 
             // If Ransac reachs max. iterations discard keyframe
@@ -413,23 +420,22 @@ void MapMatcher::CorrectLoop()
 {
     cout << "\033[1;36m!!! MAP MATCH FOUND !!!\033[0m" << endl;
     //该地图包含几个客户端的地图msuAssClients
+    //msuAssClients最初只有该地图对应的客户端id
     set<size_t> suAssCLientsCurr = mpCurrentKF->GetMapptr()->msuAssClients;
     set<size_t> suAssCLientsMatch = mpMatchedKF->GetMapptr()->msuAssClients;
-
+    
     for(set<size_t>::iterator sit = suAssCLientsCurr.begin();sit!=suAssCLientsCurr.end();++sit)
     {
         size_t idc = *sit;
         for(set<size_t>::iterator sit2 = suAssCLientsMatch.begin();sit2!=suAssCLientsMatch.end();++sit2)
         {
             size_t idm = *sit2;
-
             if(idc == idm) cout << "\033[1;31m!!! ERROR !!!\033[0m In \"MapMatcher::CorrectLoop()\": Associated Clients of matched and current map intersect" << endl;
-
             mMatchMatrix.at<uint16_t>(idc,idm) = mMatchMatrix.at<uint16_t>(idc,idm) + 1;
             mMatchMatrix.at<uint16_t>(idm,idc) = mMatchMatrix.at<uint16_t>(idm,idc)  + 1;
         }
     }
-
+    //如果当前帧所在的地图与匹配帧所在的地图同属一个或者当前帧的地图包括匹配帧的报错，若当前帧所属地图不在当前帧地图列表，报错
     if(mpCurrentKF->mId.second == mpMatchedKF->mId.second) cout << "\033[1;31m!!! ERROR !!!\033[0m In \"MapMatcher::CorrectLoop()\": Matched KFs belong to same client" << endl;
     if(!mpCurrMap->msuAssClients.count(mpCurrentKF->mId.second)) cout << "\033[1;31m!!! ERROR !!!\033[0m In \"MapMatcher::CorrectLoop()\": Current KFs does not belong to current map" << endl;
     if(mpCurrMap->msuAssClients.count(mpMatchedKF->mId.second)) cout << "\033[1;31m!!! ERROR !!!\033[0m In \"MapMatcher::CorrectLoop()\": Matched KFs belongs to current map" << endl;
@@ -438,7 +444,8 @@ void MapMatcher::CorrectLoop()
         PublishLoopEdges();
 
     mapptr pMatchedMap = mpMatchedKF->GetMapptr();
-
+    //mvpLoopMapPoints---闭环关键帧上的所有相连关键帧的地图点  mvpCurrentMatchedPoints---地图点在"当前关键帧"中成功地找到了匹配点的地图点的集合
+   //mg2oScw---世界坐标系到当前帧的sim3变换
     MapMatchHit MMH(mpCurrentKF,mpMatchedKF,mg2oScw,mvpLoopMapPoints,mvpCurrentMatchedPoints);
     mFoundMatches[mpCurrMap][pMatchedMap].push_back(MMH);
     mFoundMatches[pMatchedMap][mpCurrMap].push_back(MMH);
@@ -446,7 +453,7 @@ void MapMatcher::CorrectLoop()
     if(mFoundMatches[mpCurrMap][pMatchedMap].size() >= 1)
     {
         vector<MapMatchHit> vMatches = mFoundMatches[mpCurrMap][pMatchedMap];
-
+        //两张地图融合
         mapptr pMergedMap = mpMapMerger->MergeMaps(mpCurrMap,pMatchedMap,vMatches);
     }
 

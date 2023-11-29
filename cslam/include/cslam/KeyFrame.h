@@ -195,6 +195,7 @@ public:
 
     // Set/check bad / empty flag
     void SetBadFlag(bool bSuppressMapAction = false, bool bNoParent = false);
+    void SetBadFlag(int type,bool bSuppressMapAction = false, bool bNoParent = false);
     bool isBad() {unique_lock<mutex> lock(mMutexConnections); return mbBad;}
     bool IsEmpty() {unique_lock<mutex> lock(mMutexConnections); return mbIsEmpty;}
     bool mbOmitSending;
@@ -283,6 +284,7 @@ public:
     //---IDs---
     static long unsigned int nNextId;
     idpair mFrameId;
+    //first表示第几帧 second表示clintID
     idpair mId;
     size_t mUniqueId;
     size_t mVisId;
@@ -340,7 +342,10 @@ public:
     std::vector<int> passblue;
     std::vector<int> passgreen;
     std::vector<int> passred;
-
+    double ComputeRedundancyValue();
+    bool sort_by_redval(const kfptr a, const kfptr b);
+    double latest_red_val_;
+    double GetTimeSpanPredSucc(bool bIgnoreMutex=false);
 
 
     //BoW

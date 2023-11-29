@@ -149,6 +149,7 @@ public:
     bool IsInKeyFrame(kfptr pKF);
 
     void SetBadFlag(bool bSuppressMapAction = false);
+    void SetBadFlag(int flag,bool bSuppressMapAction = false);
     bool isBad() {unique_lock<mutex> lock(mMutexFeatures); unique_lock<mutex> lock2(mMutexPos); return mbBad;}
     bool IsEmpty() {unique_lock<mutex> lock(mMutexFeatures); unique_lock<mutex> lock2(mMutexPos); return mbIsEmpty;}
     bool mbOmitSending;

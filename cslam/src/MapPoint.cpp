@@ -573,6 +573,59 @@ void MapPoint::SetBadFlag(bool bSuppressMapAction)
     #endif
 }
 
+void MapPoint::SetBadFlag(int flag,bool bSuppressMapAction)
+{
+    #ifdef LOGGING
+    ccptr pCC;
+    if(this->mSysState == SERVER)
+    {
+        pCC = mpMap->GetCCPtr(this->mId.second);
+        pCC->mpLogger->SetMP(__LINE__,this->mId.second);
+    }
+    #endif
+
+    {
+        if(mbBad)
+        {
+            #ifdef LOGGING
+            if(this->mSysState == SERVER)
+                pCC->mpLogger->SetMP(__LINE__,this->mId.second);
+            #endif
+            return;
+        }
+    }
+
+    map<kfptr,size_t> obs;
+    {
+        unique_lock<mutex> lock1(mMutexFeatures);
+        unique_lock<mutex> lock2(mMutexPos);
+        mbBad=true;
+        obs = mObservations;
+        mObservations.clear();
+    }
+
+    for(map<kfptr,size_t>::iterator mit=obs.begin(), mend=obs.end(); mit!=mend; mit++)
+    {
+        kfptr pKF = mit->first;
+        pKF->EraseMapPointMatch(mit->second);
+    }
+
+    if(!this->IsSent())
+    {
+        this->EraseInOutBuffer();
+    }
+
+    if(!bSuppressMapAction)
+        mpMap->EraseMapPoint(this->shared_from_this(),false);
+    else
+        mpMap->mspMPsToErase.insert(this->shared_from_this());
+
+    #ifdef LOGGING
+    if(this->mSysState == SERVER)
+        pCC->mpLogger->SetMP(__LINE__,this->mId.second);
+    #endif
+}
+
 MapPoint::mpptr MapPoint::GetReplaced()
 {
     unique_lock<mutex> lock1(mMutexFeatures);

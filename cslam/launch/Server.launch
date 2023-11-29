@@ -14,14 +14,19 @@
   <node pkg="tf" type="static_transform_publisher" name="linkS1_broadcaster" args="0 0 5 -1.571 0 -2 world odomS1 100" />
   <node pkg="tf" type="static_transform_publisher" name="linkS2_broadcaster" args="0 0 5 -1.571 0 -2 world odomS2 100" />
   <node pkg="tf" type="static_transform_publisher" name="linkS3_broadcaster" args="0 0 5 -1.571 0 -2 world odomS3 100" />
+ 
+  
 
 <node pkg="ccmslam" type="ccmslamServerNode" name="ccmslamServerNode" args="$(find ccmslam)/conf/ORBvoc.bin" output="screen">
 
+
+
+  
   <!-- +++++++++++++++++++++++++++++++++++++++++++++ -->
   <!-- !!! ADJUST INPUT TOPIC NAMES IF NECESSARY !!! -->
   <!-- +++++++++++++++++++++++++++++++++++++++++++++ -->
 
-  <param name="NumOfClients" type="int" value="2" />
+  <param name="NumOfClients" type="int" value="3" />
 
   <param name="LoadMap" type="bool" value="false" />
 
@@ -52,4 +57,9 @@
 </node>
 
   </group>
+
+  <arg name="map" default="pgm.yaml" />
+    <!-- 运行地图服务器，并且加载设置的地图-->
+  <node name="map_server" pkg="map_server" type="map_server" args="$(find ccmslam)/conf/pgm.yaml"/>
+  <node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="0 0 0 0 0 0 world map 100" />
 </launch>

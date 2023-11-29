@@ -100,16 +100,25 @@ Map::Map(const mapptr &pMapTarget, const mapptr &pMapToFuse)
     }
 
     //data Map A
+    //msuAssClientsA地图包含几个客户端
     set<size_t> msuAssClientsA = pMapTarget->msuAssClients;
+    //不太确定
     set<size_t> msnFinishedAgentsA = pMapTarget->msnFinishedAgents;
+    //第一帧关键帧？
     vector<kfptr> mvpKeyFrameOriginsA = pMapTarget->mvpKeyFrameOrigins;
+    //关键帧和地图点的数量
     long unsigned int mnMaxKFidA = pMapTarget->GetMaxKFid();
     long unsigned int mnMaxMPidA = pMapTarget->GetMaxMPid();
+    //跟maxid应该是一样的
     long unsigned int mnMaxKFidUniqueA = pMapTarget->GetMaxKFidUnique();
-    long unsigned int mnMaxMPidUniqueA = pMapTarget->GetMaxKFidUnique();
+    long unsigned int mnMaxMPidUniqueA = pMapTarget->GetMaxMPidUnique();
+    //所有地图点
     std::map<idpair,mpptr> mmpMapPointsA = pMapTarget->GetMmpMapPoints();
+    //所有关键帧
     std::map<idpair,kfptr> mmpKeyFramesA = pMapTarget->GetMmpKeyFrames();
+    //删除的地图点？
     std::map<idpair,mpptr> mmpErasedMapPointsA = pMapTarget->GetMmpErasedMapPoints();
+    //删除的关键帧？
     std::map<idpair,kfptr> mmpErasedKeyFramesA = pMapTarget->GetMmpErasedKeyFrames();
     set<ccptr> spCCA = pMapTarget->GetCCPtrs();
 
@@ -120,7 +129,7 @@ Map::Map(const mapptr &pMapTarget, const mapptr &pMapToFuse)
     long unsigned int mnMaxKFidB = pMapToFuse->GetMaxKFid();
     long unsigned int mnMaxMPidB = pMapToFuse->GetMaxMPid();
     long unsigned int mnMaxKFidUniqueB = pMapToFuse->GetMaxKFidUnique();
-    long unsigned int mnMaxMPidUniqueB = pMapToFuse->GetMaxKFidUnique();
+    long unsigned int mnMaxMPidUniqueB = pMapToFuse->GetMaxMPidUnique();
     std::map<idpair,mpptr> mmpMapPointsB = pMapToFuse->GetMmpMapPoints();
     std::map<idpair,kfptr> mmpKeyFramesB = pMapToFuse->GetMmpKeyFrames();
     std::map<idpair,mpptr> mmpErasedMapPointsB = pMapToFuse->GetMmpErasedMapPoints();
@@ -129,7 +138,8 @@ Map::Map(const mapptr &pMapTarget, const mapptr &pMapToFuse)
 
     //fill new map
     mOdomFrame = pMapTarget->mOdomFrame;
-
+    
+    //msuAssClients--把A和B包含的所有地图都添加到新地图
     msuAssClients.insert(msuAssClientsA.begin(),msuAssClientsA.end());
     msuAssClients.insert(msuAssClientsB.begin(),msuAssClientsB.end());
     msnFinishedAgents.insert(msnFinishedAgentsA.begin(),msnFinishedAgentsA.end());
@@ -178,6 +188,7 @@ void Map::UpdateAssociatedData()
     for(std::map<idpair,kfptr>::iterator mit = mmpKeyFrames.begin();mit!=mmpKeyFrames.end();++mit)
     {
         kfptr pKF = mit->second;
+        //关键帧的地图指针转换
         pKF->ReplaceMap(this->shared_from_this());
         for(set<commptr>::const_iterator sit2 = mspComm.begin();sit2!=mspComm.end();++sit2)
         {
@@ -311,7 +322,50 @@ void Map::EraseMapPoint(mpptr pMP)
         mmpErasedMapPoints[pMP->mId] = pMP;
     }
 }
+//my add kfculling
+void Map::EraseMapPoint(mpptr pMP,bool flag){
+    if(flag)
+        mMutexMap.lock();
 
+    std::map<idpair,mpptr>::iterator mit = mmpMapPoints.find(pMP->mId);
+    if(mit != mmpMapPoints.end()) mmpMapPoints.erase(mit);
+
+    if(msuAssClients.count(pMP->mId.second))
+    {
+        unique_lock<mutex> lock2(mMutexErased);
+        mmpErasedMapPoints[pMP->mId] = pMP;
+    }
+    if(flag) mMutexMap.unlock();
+}
+
+bool  Map::EraseKeyFrame(kfptr pKF,bool flag){
+    bool success = false;
+    if(pKF->mId.first == 0)
+    {
+        cout << COUTFATAL << " cannot erase Origin-KF" << endl;
+        throw infrastructure_ex();
+    }
+    std::map<idpair,kfptr>::iterator mit = mmpKeyFrames.find(pKF->mId);
+    //pKF->SetBadFlag();
+    if(mit != mmpKeyFrames.end()) mmpKeyFrames.erase(mit);
+
+    if(msuAssClients.count(pKF->mId.second))
+    {
+        unique_lock<mutex> lock2(mMutexErased);
+        mmpErasedKeyFrames[pKF->mId] = pKF;
+        
+    }
+    success =true;
+
+    return success;
+ }
+bool Map::EraseKeyframeWithDatabase(kfptr kf, bool mtx_lock, dbptr database){
+    // bool success = this->EraseKeyframe(kf,mtx_lock);
+    // if(success)
+    //     database->erase(kf);
+    kf->SetBadFlag(1,false,false);
+    return true;
+}
 void Map::EraseKeyFrame(kfptr pKF)
 {
     if(pKF->mId.first == 0)
@@ -708,7 +762,7 @@ Map::kfptr Map::GetRandKfPtr()
     {
         //KF ID
         size_t min = 0; //this KF is the query KF, it's neighbors are candidates for culling -- so 0 and 1 can be considered
-        size_t max = mnMaxKFid;
+        size_t max = mnMaxKFid-(params::mapping::miNumRecentKFs)+5;
         size_t id = min + (rand() % (size_t)(max - min + 1));
 
         //Client ID
@@ -1180,7 +1234,7 @@ void Map::HandleMissingParent(size_t QueryId, size_t QueryCId, cv::Mat &T_cref_c
     {
         cout << "\033[1;31m!!!!! ERROR !!!!!\033[0m " << __func__ << __LINE__ << ": Cannot find parent from msg" << endl;
         cout << "parent KF: " << QueryId << "|" << QueryCId << endl;
-        cout << "KFs in map: " << mmpKeyFrames.size() << endl;
+        //cout << "KFs in map: " << mmpKeyFrames.size() << endl;
         throw estd::infrastructure_ex();
     }
 
@@ -1670,6 +1724,121 @@ void Map::WriteStateToCsv(const std::string& filename,
   std::cout << "KFs written to file" << std::endl;
 }
 
+//my add kfculling
+int Map::RemoveRedundantData(double th_red, int max_kfs){
+    //cout<<"here11"<<endl;
+    this->clean();
+    //cout<<"here222"<<endl;
+    unique_lock<mutex> lock(mMutexMap);
+    int removed_kfs = 0;
+    vector<kfptr>  kfs;
+    
+    for(auto &p :mmpKeyFrames){
+        kfptr kf =p.second;
+        if(kf->mId.first == 0)
+            continue;
+        if(!kf->GetParent())
+            continue;
+        if(kf->GetChilds().empty())
+            continue;
+        kfs.push_back(kf);
+    }
+    
+    int thre=0;
+    if(this->isfused==true)
+        thre=300;
+    else
+        thre=150;
+    while(mmpKeyFrames.size()>thre){
+        this->CalRedVals(kfs);
+        if(kfs.empty()) {
+                std::cout << COUTWARN << "no KFs to erase" << std::endl;
+                break;
+        }
+        bool can_be_removed = true;
+        //cout<<"here11"<<endl;
+        if(kfs[0]->GetTimeSpanPredSucc()>=1.0)
+            can_be_removed=false;
+        //cout<<"here222"<<endl;
+       if(!kfs[0]->GetLoopEdges().empty())
+            can_be_removed=false;
+        //cout<<"here333"<<endl;
+        if(can_be_removed){
+            this->EraseKeyframeWithDatabase(kfs[0],false,mpKFDB);
+            removed_kfs++;
+        }
+        //cout<<"here444"<<endl;
+        kfs.erase(kfs.begin());
+    }
+
+    //cout<<"all kf size : "<<this->mmpKeyFrames.size()<<endl;
+    return removed_kfs;
+}
+
+void Map::clean(){
+    unique_lock<mutex> lock(mMutexMap);
+    //std::cout << "+++ Clean Map +++" << std::endl;
+    //std::cout << "--> Remove Landmarks" << std::endl;
+    this->RemoveLandmarkOutliers();
+    //std::cout << "+++ DONE +++" << std::endl;
+}
+
+int  Map::RemoveLandmarkOutliers(){
+    int removed_lms = 0;
+    int removed_lms_map = 0;
+    int removed_lms_kfs = 0;
+
+    std::list<mpptr> lms_to_remove;
+
+    for(map<idpair,mpptr>::iterator it=mmpMapPoints.begin(); it!=mmpMapPoints.end();){
+        mpptr mp=it->second;
+        if(!mp){
+            mmpErasedMapPoints.erase(it);
+        }
+            
+        else{
+            if(mp->Observations()<2){
+                lms_to_remove.push_back(mp);
+            }
+            it++;
+        }
+    }
+    //cout<<"badflag"<<endl;
+    for(auto &it:lms_to_remove){
+        it->SetBadFlag(1,false);
+        //this->EraseMapPoint(it,false);
+        removed_lms++;
+        removed_lms_map++;
+    }
+    for(auto &i:mmpKeyFrames){
+        kfptr kf=i.second;
+        vector<mpptr> kf_mps=kf->GetMapPointMatches();
+        for(auto &mp:kf_mps){
+            if(!mp)
+                continue;
+            if(mp->Observations()<2){
+                mp->SetBadFlag(1,false);
+                //this->EraseMapPoint(mp,false);
+                removed_lms++;
+                removed_lms_kfs++;
+            }
+        }
+    }
+    //std::cout << "----> Done: Removed " << removed_lms << " Landmarks" << std::endl;
+    //std::cout << "------> from map checks: " << removed_lms_map << std::endl;
+    //std::cout << "------> from kf checks:  " << removed_lms_kfs << std::endl;
+
+    return removed_lms;
+}
+
+void Map::CalRedVals(vector<kfptr> &kfs){
+    for(auto &k : kfs){
+        k->ComputeRedundancyValue();
+    }
+    std::sort(kfs.begin(),kfs.end(),[](kfptr a,kfptr b){
+        return a->latest_red_val_>b->latest_red_val_;
+    });
+}
 #ifdef DEBUGGING2
 void Map::CheckStructure()
 {

@@ -47,6 +47,7 @@
 #include <cslam/ClientHandler.h>
 #include <cslam/MapMatcher.h>
 #include <cslam/Viewer.h>
+#include <cslam/KeyFrame.h>
 
 #include "ccmslam/ServiceSaveMap.h"
 #include <cslam/pointcloudmapping.h>
@@ -66,17 +67,21 @@ public:
     typedef boost::shared_ptr<Viewer> viewptr;
     typedef boost::shared_ptr<CentralControl> ccptr;
     typedef boost::shared_ptr<PointCloudMapping> pcmptr;
+    typedef boost::shared_ptr<KeyFrame> kfptr;
 public:
     ServerSystem(ros::NodeHandle Nh, ros::NodeHandle NhPrivate, const string &strVocFile);
     void InitializeClients();
     void InitializeMapMatcher();
     void save();
+    void shutdown();
 
 
     bool CallbackSaveMap(ccmslam::ServiceSaveMap::Request &req, ccmslam::ServiceSaveMap::Response &res);
 
     //my add
     pcmptr mpPointCloudMapping;
+     string strname;
+     mapptr mpMap0;
     //----------
 private:
     void LoadVocabulary(const string &strVocFile);
@@ -92,14 +97,19 @@ private:
     ros::NodeHandle mNhPrivate;
 
     ros::ServiceServer mServiceSavemap;
+    //my add kfculling
+    ros::ServiceServer mServicekfculling;
+    bool Callbackprunemap();
+   
 
     vocptr mpVoc;
     dbptr mpKFDB;
     matchptr mpMapMatcher;
     viewptr mpViewer;
 
+
     chptr mpClient0;
-    mapptr mpMap0;
+    
     chptr mpClient1;
     mapptr mpMap1;
     chptr mpClient2;

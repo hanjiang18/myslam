@@ -424,7 +424,10 @@ void KeyFrame::UpdateBestCovisibles()
     mvpOrderedConnectedKeyFrames = vector<kfptr>(lKFs.begin(),lKFs.end());
     mvOrderedWeights = vector<int>(lWs.begin(), lWs.end());
 }
-
+    /**
+     * @brief 得到与该关键帧连接的关键帧(没有排序的)
+     * @return 连接的关键帧
+     */
 set<KeyFrame::kfptr> KeyFrame::GetConnectedKeyFrames()
 {
     unique_lock<mutex> lock(mMutexConnections);
@@ -641,6 +644,7 @@ void KeyFrame::UpdateConnections(bool bIgnoreMutex)
 
     //For all map points in keyframe check in which other keyframes are they seen
     //Increase counter for those keyframes
+    //给关键帧重新编号
     for(vector<mpptr>::iterator vit=vpMP.begin(), vend=vpMP.end(); vit!=vend; vit++)
     {
         mpptr pMP = *vit;
@@ -650,7 +654,7 @@ void KeyFrame::UpdateConnections(bool bIgnoreMutex)
 
         if(pMP->isBad())
             continue;
-
+        //获取观测到当前地图点的关键帧
         map<kfptr,size_t> observations = pMP->GetObservations();
 
         for(map<kfptr,size_t>::iterator mit=observations.begin(), mend=observations.end(); mit!=mend; mit++)
@@ -660,6 +664,8 @@ void KeyFrame::UpdateConnections(bool bIgnoreMutex)
             KFcounter[mit->first]++;
         }
     }
+
+    // KFcounter里面存放的是每个帧被多少个点看到
 
     if(KFcounter.empty())
     {
@@ -676,6 +682,7 @@ void KeyFrame::UpdateConnections(bool bIgnoreMutex)
     vPairs.reserve(KFcounter.size());
     for(map<kfptr,int>::iterator mit=KFcounter.begin(), mend=KFcounter.end(); mit!=mend; mit++)
     {
+        //更新nmax，pKFmax
         if(mit->second>nmax)
         {
             nmax=mit->second;
@@ -684,6 +691,7 @@ void KeyFrame::UpdateConnections(bool bIgnoreMutex)
         if(mit->second>=th)
         {
             vPairs.push_back(make_pair(mit->second,mit->first));
+            //添加共视
             (mit->first)->AddConnection(this->shared_from_this(),mit->second);
         }
     }
@@ -693,10 +701,10 @@ void KeyFrame::UpdateConnections(bool bIgnoreMutex)
         vPairs.push_back(make_pair(nmax,pKFmax));
         pKFmax->AddConnection(this->shared_from_this(),nmax);
     }
-
+    //根据每个帧被点看到的多少排序 从大到小
     sort(vPairs.begin(),vPairs.end());
-    list<kfptr> lKFs;
-    list<int> lWs;
+    list<kfptr> lKFs;//关键帧
+    list<int> lWs;//被看到次数
     for(size_t i=0; i<vPairs.size();i++)
     {
         lKFs.push_front(vPairs[i].second);
@@ -1136,6 +1144,217 @@ void KeyFrame::SetBadFlag(bool bSuppressMapAction, bool bNoParent)
         mpMap->EraseKeyFrame(this->shared_from_this());
 
     mpKeyFrameDB->erase(this->shared_from_this());
+
+    #ifdef LOGGING
+    if(this->mSysState == SERVER)
+        pCC->mpLogger->SetKF(__LINE__,this->mId.second);
+    #endif
+}
+
+//my add
+void KeyFrame::SetBadFlag(int type,bool bSuppressMapAction, bool bNoParent)
+{
+
+    #ifdef LOGGING
+    ccptr pCC;
+    if(this->mSysState == SERVER)
+    {
+        pCC = mpMap->GetCCPtr(this->mId.second);
+        pCC->mpLogger->SetKF(__LINE__,this->mId.second);
+    }
+    #endif
+
+    {
+        if(mbBad)
+        {
+            #ifdef LOGGING
+            if(this->mSysState == SERVER)
+                pCC->mpLogger->SetKF(__LINE__,this->mId.second);
+            #endif
+            return;
+        }
+    }
+
+    {
+        unique_lock<mutex> lock(mMutexConnections);
+
+        if(mId.first==0)
+        {
+            #ifdef LOGGING
+            if(this->mSysState == SERVER)
+                pCC->mpLogger->SetKF(__LINE__,this->mId.second);
+            #endif
+            return;
+        }
+        else if(mbNotErase)
+        {
+            if(mSysState == eSystemState::CLIENT)
+            {
+                cout << "\033[1;31m!!!!! ERROR !!!!!\033[0m " << __func__ << __LINE__ << " mbNotErase not supposed to be  TRUE at any time on client" << endl;
+                throw infrastructure_ex();
+            }
+
+            mbToBeErased = true;
+            #ifdef LOGGING
+            if(this->mSysState == SERVER)
+                pCC->mpLogger->SetKF(__LINE__,this->mId.second);
+            #endif
+            return;
+        }
+
+        for(map<kfptr,int>::iterator mit = mConnectedKeyFrameWeights.begin(), mend=mConnectedKeyFrameWeights.end(); mit!=mend; mit++)
+            mit->first->EraseConnection(this->shared_from_this());
+    }
+
+    for(size_t i=0; i<mvpMapPoints.size(); i++)
+    {
+        if(mvpMapPoints[i])
+        {
+                mpptr pMPx = mvpMapPoints[i];
+                pMPx->EraseObservation(this->shared_from_this(),false,true);
+        }
+    }
+
+    {
+        unique_lock<mutex> lock(mMutexConnections);
+        unique_lock<mutex> lock1(mMutexFeatures);
+
+        mConnectedKeyFrameWeights.clear();
+        mvpOrderedConnectedKeyFrames.clear();
+
+        // Update Spanning Tree
+        set<kfptr> sParentCandidates;
+        sParentCandidates.insert(mpParent);
+
+        // Assign at each iteration one children with a parent (the pair with highest covisibility weight)
+        // Include that children as new parent candidate for the rest
+        while(!mspChildrens.empty())
+        {
+            bool bContinue = false;
+
+            int max = -1;
+            kfptr pC;
+            kfptr pP;
+
+            for(set<kfptr>::iterator sit=mspChildrens.begin(), send=mspChildrens.end(); sit!=send; sit++)
+            {
+                kfptr pKF = *sit;
+                if(pKF->isBad())
+                    continue;
+
+                // Check if a parent candidate is connected to the keyframe
+                vector<kfptr> vpConnected = pKF->GetVectorCovisibleKeyFrames();
+                for(size_t i=0, iend=vpConnected.size(); i<iend; i++)
+                {
+                    for(set<kfptr>::iterator spcit=sParentCandidates.begin(), spcend=sParentCandidates.end(); spcit!=spcend; spcit++)
+                    {
+                        if(pKF->hasChild(*spcit))
+                            continue;
+
+                        if(mSysState == eSystemState::SERVER)
+                        {
+                            //Enforce tree structure on server
+                            if(!((*spcit)->mId < pKF->mId))
+                                continue;
+                        }
+
+                        if((*spcit)->mbFromServer)
+                            continue; // do not use KFs from Server as parents
+
+                        if(vpConnected[i]->mId == (*spcit)->mId)
+                        {
+                            int w = pKF->GetWeight(vpConnected[i]);
+                            if(w>max)
+                            {
+                                pC = pKF;
+                                pP = vpConnected[i];
+                                max = w;
+                                bContinue = true;
+                            }
+                        }
+                    }
+                }
+
+                #ifdef DEBUGGING2
+                {
+                    kfptr pKFp = pKF->GetParent();
+                    if(pKFp)
+                    {
+                        if(pKFp->mId == pKF->mId)
+                        {
+                            std::cout << COUTERROR << "KF " << pKF->mId.first << "|" << pKF->mId.second << " : is its own parent" << std::endl;
+                        }
+                    }
+                    else
+                    {
+                        if(!pKF->mId.first==0)
+                            std::cout << COUTERROR << "KF " << pKF->mId.first << "|" << pKF->mId.second << " : no parent" << std::endl;
+                    }
+                }
+                #endif
+            }
+
+            if(bContinue)
+            {
+                pC->ChangeParent(pP);
+                sParentCandidates.insert(pC);
+                mspChildrens.erase(pC);
+            }
+            else
+                break;
+        }
+
+        // If a children has no covisibility links with any parent candidate, assign to the original parent of this KF
+        if(!mspChildrens.empty())
+        {
+            while(!mspChildrens.empty()) //cannot use "for(set<kfptr>::iterator sit=mspChildrens.begin(); sit!=mspChildrens.end(); sit++)" here --> ChangeParent will erase a child, this results in a memory leak
+            {
+
+                kfptr pCi = *(mspChildrens.begin());
+
+                pCi->ChangeParent(mpParent);
+
+                #ifdef DEBUGGING2
+                {
+                    kfptr pKFp = pCi->GetParent();
+                    if(pKFp)
+                    {
+                        if(pKFp->mId == pCi->mId)
+                        {
+                            std::cout << COUTERROR << "KF " << pCi->mId.first << "|" << pCi->mId.second << " : is its own parent" << std::endl;
+                        }
+                    }
+                    else
+                    {
+                        if(!pCi->mId.first==0)
+                            std::cout << COUTERROR << "KF " << pCi->mId.first << "|" << pCi->mId.second << " : no parent" << std::endl;
+                    }
+                }
+                #endif
+            }
+        }
+
+        if(!bNoParent)
+        {
+            //When KF comes from Server, and can not acquire MPs, it also has no parent, since there are no connected KFs
+            if(mpParent)
+            {
+                mpParent->EraseChild(this->shared_from_this());
+                mTcp = Tcw*mpParent->GetPoseInverse().clone();
+            }
+            else
+            {
+                Tcw.copyTo(mTcp);
+                mpParent = mpMap->GetKfPtr(0,mId.second);
+            }
+        }
+        mbBad = true;
+    }
+
+
+    mpMap->EraseKeyFrame(this->shared_from_this(),false);
+    mpKeyFrameDB->erase(this->shared_from_this());
+        
 
     #ifdef LOGGING
     if(this->mSysState == SERVER)
@@ -2046,5 +2265,49 @@ void KeyFrame::getPCinfo(cv::Mat& color, cv::Mat& depth){
             passred.push_back((int)color.ptr<uchar>(m)[n*3+2]);
         }
     }
+}
+
+ double KeyFrame::ComputeRedundancyValue(){
+    double red_sum = 0;
+    double n_lms = 0;
+    vector<mpptr> landmark=this->GetMapPointMatches();
+    for(auto &mp :landmark){
+        if(!mp)
+            continue;
+        int n_obs=mp->Observations();
+        if(n_obs < 2) {
+            continue;
+        }
+        double value = 0.0;
+        if(n_obs == 2) value = 0.0;
+        else if(n_obs == 3) value = 0.4;
+        else if(n_obs == 4) value = 0.7;
+        else if(n_obs == 5) value = 0.9;
+        else value = 1.0;
+
+        red_sum += value;
+        n_lms += 1.0;
+    }
+    double red_val = red_sum / n_lms;
+
+    latest_red_val_ = red_val;
+    return red_val;
+ }   
+
+bool KeyFrame::sort_by_redval(const kfptr a, const kfptr b){
+    if(a->latest_red_val_ > b->latest_red_val_) return true;
+    else return false;
+}
+
+double KeyFrame::GetTimeSpanPredSucc(bool bIgnoreMutex){
+    if(!bIgnoreMutex) {
+        unique_lock<mutex> lock(mMutexConnections);
+    }
+    if(!mpParent)
+        return -1.0;
+    if(mspChildrens.empty()) return -1.0;
+    auto it=*mspChildrens.begin();
+     double dDelta_t =mpParent->mTimeStamp-it->mTimeStamp;
+     return dDelta_t;
 }
 } //end ns;

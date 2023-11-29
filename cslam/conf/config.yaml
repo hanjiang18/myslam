@@ -77,8 +77,8 @@ Tracking.TrackLocalMapInlierThres: 30
 
 Mapping.LocalMapSize: 500
 Mapping.LocalMapBuffer: 20
-Mapping.RecentKFWindow: 20
-Mapping.RedThres: 0.98
+Mapping.RecentKFWindow: 500 #200
+Mapping.RedThres: 0.90
 
 #--------------------------------------------------------------------------------------------
 # Communication Parameters
@@ -126,7 +126,7 @@ Opt.TotalMatchesThres: 40
 Opt.Probability: 0.99
 Opt.MinInliers: 6
 Opt.MaxIterations: 300
-Opt.GBAIterations: 20
+Opt.GBAIterations: 10
 Opt.EssGraphMinFeats: 100
 
 #--------------------------------------------------------------------------------------------
@@ -143,7 +143,7 @@ Viewer.ShowKFs: 0
 # Display only edges with weight >= CovGraphMinFeats (only used for visualization)
 Viewer.CovGraphMinFeats: 100
 
-Viewer.ScaleFactor: 1.0 #20
+Viewer.ScaleFactor: 1 #20
 
 # Line Diameters
 Viewer.TrajMarkerSize: 0.025 #0.25
@@ -178,7 +178,7 @@ Viewer.ColorBcov: 0.6
 
 
 #pointcloud
-PointCloud.res : 0.03
+PointCloud.res : 0.5
 PointCLoud.meank : 50
 PointCloud.thresh : 2.0
 

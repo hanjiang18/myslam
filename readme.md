@@ -108,7 +108,7 @@ unzip ORBvoc.txt.zip
 Build the code:
 ```
 cd ~/ccmslam_ws/
-catkin build ccmslam --cmake-args -DG2O_U14=0 -DCMAKE_BUILD_TYPE=Release
+catkin build -j4 ccmslam --cmake-args -DG2O_U14=0 -DCMAKE_BUILD_TYPE=Debug
 source ~/ccmslam_ws/devel/setup.bash
 ```
 

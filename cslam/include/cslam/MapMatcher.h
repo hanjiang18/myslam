@@ -143,6 +143,9 @@ private:
     mapptr mpCurrMap;
 
     float mnCovisibilityConsistencyTh;
+    //pair<set<kfptr>,int>---ConsistentGroup 
+    //std::map<mapptr,std::vector<pair<set<kfptr>,int>>> mmvConsistentGroups;
+    //每一个地图的连续组
     std::map<mapptr,std::vector<ConsistentGroup>> mmvConsistentGroups;
     std::vector<kfptr> mvpEnoughConsistentCandidates;
     std::vector<kfptr> mvpCurrentConnectedKFs;

@@ -91,6 +91,7 @@ public:
     void InitializeThreads(boost::shared_ptr<estd::mylog> pLogger = nullptr);
     #else
     void InitializeThreads();
+    void shutdown();
     #endif
 
     //---getter/setter---

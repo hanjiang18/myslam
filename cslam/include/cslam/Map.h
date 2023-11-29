@@ -89,7 +89,22 @@ public:
     void UpdateAssociatedData(); //need to be called after merge constructor. Cannot be called by merge constructor because of usage of shared_from_this()
     Map& operator=(Map& rhs);
 
+
+
+    //my add kfculling
+    int RemoveRedundantData(double th_red, int max_kfs);
+    void clean();
+    int RemoveLandmarkOutliers();
+    void EraseMapPoint(mpptr pMP,bool flag);
+    bool EraseKeyFrame(kfptr pKF,bool flag);
+    void CalRedVals(vector<kfptr> &kfs);
+    dbptr mpKFDB;
+    bool EraseKeyframeWithDatabase(kfptr kf, bool mtx_lock, dbptr database);
+    bool isfused=false;
+
+
     //---infrastructure---
+    
     set<size_t> msuAssClients;
     void AddCCPtr(ccptr pCC);
     set<ccptr> GetCCPtrs();
@@ -290,6 +305,7 @@ protected:
     long unsigned int mnMaxMPidUnique;
     long unsigned int mnLastKfIdUnique;
 
+    //全部地图点和关键帧
     std::map<idpair,mpptr> mmpMapPoints; //Performance: second container is not nice, but fast... //CHECKHERE
     std::map<idpair,kfptr> mmpKeyFrames; //Performance: second container is not nice, but fast... //CHECKHERE
     std::map<idpair,mpptr> mmpErasedMapPoints;

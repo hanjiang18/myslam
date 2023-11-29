@@ -856,22 +856,15 @@ void Viewer::PubMapPointsAsCloud()
         ++mvNumPoints[mCurVisBundle.mNativeId];
     }
 
-   
-    //tempcloud::Ptr temp (new tempcloud(*(mpPointCloudMapping->globalMap)));
-    // for(int i=0; i<((*temp).points.size()); i++){
-    //     (*temp).points[i].x*=(params::vis::mfScaleFactor);
-    //     (*temp).points[i].y*=(params::vis::mfScaleFactor);
-    //     (*temp).points[i].z*=(params::vis::mfScaleFactor);
-    // }
-    
     if(!((*(mpPointCloudMapping->globalMap)).points.empty())){
+        //cout<<"No point cloud"<<(*(mpPointCloudMapping->globalMap)).points.size()<<endl;
         sensor_msgs::PointCloud2 pclMsg1;
         pcl::toROSMsg(*(mpPointCloudMapping->globalMap),pclMsg1);
         pclMsg1.header.frame_id = msCurFrame;
         pclMsg1.header.stamp = ros::Time::now();
         mPubDensePC.publish(pclMsg1);
     }
-    
+    //cout<<"viewer   "<<Cloud.points.size()<<endl;
     if(!Cloud.points.empty())
     {
         sensor_msgs::PointCloud2 pclMsg;
@@ -1429,6 +1422,7 @@ void Viewer::pubDensePC()
 {
 
 }
+
 void Viewer::ResetIfRequested()
 {
     unique_lock<mutex> lockReset(mMutexReset);

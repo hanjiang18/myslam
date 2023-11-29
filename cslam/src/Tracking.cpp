@@ -848,7 +848,6 @@ void Tracking::UpdateLocalPoints()
     }
 }
 
-
 void Tracking::UpdateLocalKeyFrames()
 {
     // Each map point vote for the keyframes in which it has been observed

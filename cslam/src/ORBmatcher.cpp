@@ -991,6 +991,11 @@ int ORBmatcher::Fuse(kfptr pKF, const vector<mpptr> &vpMapPoints, const float th
 
     return nFused;
 }
+/**
+ * @description: 1.如果地图点能匹配关键帧的特征点，并且该点有对应的地图点，那么选择观测数目多的替换两个地图点
+ *                              2.如果地图点能匹配关键帧的特征点，并且该点没有对应的地图点，那么为该点添加该投影地图点
+ * @return {*}
+ */
 
 int ORBmatcher::Fuse(kfptr pKF, cv::Mat Scw, const vector<mpptr> &vpPoints, float th, vector<mpptr> &vpReplacePoint)
 {
